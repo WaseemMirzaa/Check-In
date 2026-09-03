@@ -1,0 +1,63 @@
+name: Build debug APK
+
+# Manual build of a debug Android APK. Debug builds use Android's
+# auto-generated debug keystore, so this doesn't need the release
+# signing secrets (there is no android/key.properties in this repo).
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or commit to build'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses > /dev/null || true
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: 'stable'
+
+      - run: flutter pub get
+
+      - run: flutter build apk --debug --split-per-abi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debug-apks
+          path: build/app/outputs/flutter-apk/*.apk
+          retention-days: 14
+
+      - name: Push APKs to a throwaway branch for retrieval
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          OUT="$GITHUB_WORKSPACE/build/app/outputs/flutter-apk"
+          mkdir -p /tmp/apk-out
+          cp "$OUT"/*.apk /tmp/apk-out/
+          BRANCH="apk-artifact/${{ github.run_id }}"
+          git checkout --orphan "$BRANCH"
+          git rm -rf . > /dev/null 2>&1 || true
+          cp /tmp/apk-out/*.apk .
+          git add -- *.apk
+          git commit -m "Debug APK build (run ${{ github.run_id }})"
+          git push origin "$BRANCH"
