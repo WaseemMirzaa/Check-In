@@ -47,17 +47,25 @@ jobs:
           path: build/app/outputs/flutter-apk/*.apk
           retention-days: 14
 
-      - name: Push APKs to a throwaway branch for retrieval
+      - name: Push arm64-v8a APK (chunked) to a throwaway branch for retrieval
         run: |
+          # The split APKs are each well over GitHub's 100MB plain-git file
+          # limit (this is a debug build: unminified, full symbols). Ship
+          # just arm64-v8a (the architecture on the vast majority of real
+          # devices) as <100MB chunks plus a checksum, so it can be pulled
+          # back over plain git (no GitHub Actions artifact-download API
+          # access needed) and reassembled.
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           OUT="$GITHUB_WORKSPACE/build/app/outputs/flutter-apk"
+          APK="$OUT/app-arm64-v8a-debug.apk"
           mkdir -p /tmp/apk-out
-          cp "$OUT"/*.apk /tmp/apk-out/
+          sha256sum "$APK" | awk '{print $1}' > /tmp/apk-out/app-arm64-v8a-debug.apk.sha256
+          split -b 90m -d --suffix-length=2 "$APK" /tmp/apk-out/app-arm64-v8a-debug.apk.part
           BRANCH="apk-artifact/${{ github.run_id }}"
           git checkout --orphan "$BRANCH"
           git rm -rf . > /dev/null 2>&1 || true
-          cp /tmp/apk-out/*.apk .
-          git add -- *.apk
-          git commit -m "Debug APK build (run ${{ github.run_id }})"
+          cp /tmp/apk-out/* .
+          git add -- app-arm64-v8a-debug.apk.part* app-arm64-v8a-debug.apk.sha256
+          git commit -m "Debug APK build (run ${{ github.run_id }}), arm64-v8a, chunked"
           git push origin "$BRANCH"
