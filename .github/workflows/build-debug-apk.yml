@@ -47,25 +47,20 @@ jobs:
           path: build/app/outputs/flutter-apk/*.apk
           retention-days: 14
 
-      - name: Push arm64-v8a APK (chunked) to a throwaway branch for retrieval
+      - name: Publish APKs to a GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # The split APKs are each well over GitHub's 100MB plain-git file
-          # limit (this is a debug build: unminified, full symbols). Ship
-          # just arm64-v8a (the architecture on the vast majority of real
-          # devices) as <100MB chunks plus a checksum, so it can be pulled
-          # back over plain git (no GitHub Actions artifact-download API
-          # access needed) and reassembled.
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Debug APKs are well over both GitHub's 100MB plain-git file
+          # limit and typical file-relay size limits, so hand them off as
+          # browser-downloadable Release assets instead of trying to move
+          # the bytes through any other channel.
           OUT="$GITHUB_WORKSPACE/build/app/outputs/flutter-apk"
-          APK="$OUT/app-arm64-v8a-debug.apk"
-          mkdir -p /tmp/apk-out
-          sha256sum "$APK" | awk '{print $1}' > /tmp/apk-out/app-arm64-v8a-debug.apk.sha256
-          split -b 90m -d --suffix-length=2 "$APK" /tmp/apk-out/app-arm64-v8a-debug.apk.part
-          BRANCH="apk-artifact/${{ github.run_id }}"
-          git checkout --orphan "$BRANCH"
-          git rm -rf . > /dev/null 2>&1 || true
-          cp /tmp/apk-out/* .
-          git add -- app-arm64-v8a-debug.apk.part* app-arm64-v8a-debug.apk.sha256
-          git commit -m "Debug APK build (run ${{ github.run_id }}), arm64-v8a, chunked"
-          git push origin "$BRANCH"
+          TAG="debug-apk-${{ github.run_id }}"
+          gh release create "$TAG" \
+            "$OUT"/app-arm64-v8a-debug.apk \
+            "$OUT"/app-armeabi-v7a-debug.apk \
+            "$OUT"/app-x86_64-debug.apk \
+            --title "Debug APK build (run ${{ github.run_id }})" \
+            --notes "Automated debug APK build from commit ${{ github.sha }}. Unsigned with a release key (debug keystore) — install with \`adb install -r <file>.apk\` or by enabling unknown sources; not for Play Store distribution." \
+            --target "${{ github.sha }}"
