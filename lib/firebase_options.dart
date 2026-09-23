@@ -55,31 +55,34 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyArLxMF1wjbQzOw4xIqh_zfNJ8-cG7CaBY',
-    appId: '1:41160719092:android:c706181dfebd457e463ca1',
+    // Must match android/app/google-services.json client for
+    // com.developlogix.checkinapp (not the older .checkin app).
+    appId: '1:41160719092:android:ffefda83c8b104d8463ca1',
     messagingSenderId: '41160719092',
     projectId: 'check-in-7ecd7',
     storageBucket: 'check-in-7ecd7.appspot.com',
   );
 
+  // Must match ios/Runner/GoogleService-Info.plist (com.developlogix.checkinapp).
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyD2QKaerf5i4Mj0PN52-zhfZ8kQ6hcgz3Q',
-    appId: '1:41160719092:ios:246b5db2c7526c37463ca1',
+    appId: '1:41160719092:ios:804d5b269d967cff463ca1',
     messagingSenderId: '41160719092',
     projectId: 'check-in-7ecd7',
     storageBucket: 'check-in-7ecd7.appspot.com',
     iosClientId:
         '41160719092-sdkcvbdqcrci7lso8p83nrnpkvt89dqc.apps.googleusercontent.com',
-    iosBundleId: 'com.developlogix.checkin',
+    iosBundleId: 'com.developlogix.checkinapp',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyD2QKaerf5i4Mj0PN52-zhfZ8kQ6hcgz3Q',
-    appId: '1:41160719092:ios:246b5db2c7526c37463ca1',
+    appId: '1:41160719092:ios:804d5b269d967cff463ca1',
     messagingSenderId: '41160719092',
     projectId: 'check-in-7ecd7',
     storageBucket: 'check-in-7ecd7.appspot.com',
     iosClientId:
         '41160719092-sdkcvbdqcrci7lso8p83nrnpkvt89dqc.apps.googleusercontent.com',
-    iosBundleId: 'com.developlogix.checkin',
+    iosBundleId: 'com.developlogix.checkinapp',
   );
 }

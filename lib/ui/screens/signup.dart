@@ -298,8 +298,13 @@ class _SignupViewState extends State<SignupView> {
                                 : fullWidthButton(TempLanguage.signUp,
                                     () async {
                                     if (!isSignUpButtonEnabled) {
-                                      Get.snackbar(TempLanguage.error,
-                                          TempLanguage.agreeToTerms);
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              TempLanguage.agreeToTerms),
+                                        ),
+                                      );
                                     } else if (userName != '') {
                                       if (Validate(email)) {
                                         isLoading.value = true;
@@ -308,12 +313,22 @@ class _SignupViewState extends State<SignupView> {
 
                                         isLoading.value = false;
                                       } else {
-                                        Get.snackbar(TempLanguage.error,
-                                            TempLanguage.enterValidEmail);
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                TempLanguage.enterValidEmail),
+                                          ),
+                                        );
                                       }
                                     } else if (userName == '') {
-                                      Get.snackbar(TempLanguage.error,
-                                          TempLanguage.enterUserName);
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              TempLanguage.enterUserName),
+                                        ),
+                                      );
                                     }
                                   }));
                       },

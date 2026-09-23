@@ -44,32 +44,30 @@ Future<bool> signUp(
 
       List<String> nameSearchParams = setSearchParam(userName);
       String token = await FCMManager.getFCMToken();
-      String customerId =
-          await PaymentService.createStripeCustomer(email: email);
-      snap.collection(Collections.USER).doc(auth.currentUser!.uid).set({
-        UserKey.USER_NAME: auth.currentUser!.displayName,
-        UserKey.EMAIL: auth.currentUser!.email,
-        UserKey.UID: auth.currentUser!.uid,
+      String customerId = '';
+      try {
+        customerId = await PaymentService.createStripeCustomer(email: email);
+      } catch (e) {
+        print('Stripe customer create failed (continuing signup): $e');
+      }
+      final uid = auth.currentUser!.uid;
+      await snap.collection(Collections.USER).doc(uid).set({
+        UserKey.USER_NAME: userName,
+        UserKey.EMAIL: email,
+        UserKey.UID: uid,
         UserKey.CHECKED_IN: false,
         UserKey.IS_VERIFIED: false,
         UserKey.CUSTOMER_ID: customerId,
         UserKey.PARAMS: FieldValue.arrayUnion(nameSearchParams),
         UserKey.IS_TERMS_VERIFIED: true,
-        //TODO: Change it to arrayUnion
-        // UserKey.DEVICE_TOKEN:
-        // FieldValue.arrayUnion([token])
-        UserKey.DEVICE_TOKEN: [token]
-      }).then((value) {
-        snap
-            .collection(Collections.USER)
-            .doc(auth.currentUser!.uid)
-            .get()
-            .then((value) {
-          userController.userModel.value =
-              UserModel.fromMap(value.data() ?? {});
-          pushScreen(context, screen: const Home(), withNavBar: false);
-        });
+        UserKey.DEVICE_TOKEN: token.isNotEmpty ? [token] : [],
       });
+      final created = await snap.collection(Collections.USER).doc(uid).get();
+      userController.userModel.value =
+          UserModel.fromMap(created.data() ?? {UserKey.UID: uid});
+      if (context.mounted) {
+        pushScreen(context, screen: const Home(), withNavBar: false);
+      }
     });
   } on FirebaseAuthException catch (e) {
     print('error message ${e.message}');
@@ -93,8 +91,9 @@ Future<void> login(email, password, context) async {
       print(token);
       print('========> toeken');
       if (token.isNotEmpty) {
-        snap.collection(Collections.USER).doc(value.user!.uid).update(
+        await snap.collection(Collections.USER).doc(value.user!.uid).set(
           {UserKey.DEVICE_TOKEN: FieldValue.arrayUnion(tokens)},
+          SetOptions(merge: true),
         );
       }
       // Temporary --Save userid in global userid for chat
@@ -126,13 +125,13 @@ Future<void> logout(context) async {
   newsFeedController.clearUserPosts();
   //Checkout
   print('-----------token-----------$token');
-  snap.collection(Collections.USER).doc(auth.currentUser!.uid).update({
+  snap.collection(Collections.USER).doc(auth.currentUser!.uid).set({
     UserKey.CHECKED_IN: false,
     UserKey.DEVICE_TOKEN: FieldValue.arrayRemove([token]),
     CourtKey.COURT_LAT: FieldValue.delete(),
     CourtKey.COURT_LNG: FieldValue.delete(),
     // UserKey.DEVICE_TOKEN: []
-  });
+  }, SetOptions(merge: true));
 
   auth.signOut().then(
         (value) =>
@@ -248,12 +247,32 @@ Future<void> delAcc(context) async {
 }
 
 toModal(BuildContext context) async {
-  DocumentSnapshot snap = await FirebaseFirestore.instance
-      .collection(Collections.USER)
-      .doc(auth.currentUser?.uid ?? "")
-      .get();
-  UserModel userModel = UserModel.fromMap(snap.data() as Map<String, dynamic>);
-  userController.userModel.value = userModel;
+  final uid = auth.currentUser?.uid;
+  if (uid == null || uid.isEmpty) return;
+
+  final userRef =
+      FirebaseFirestore.instance.collection(Collections.USER).doc(uid);
+  DocumentSnapshot snapDoc = await userRef.get();
+
+  // Auth can exist without a Firestore profile (e.g. Stripe failed mid-signup).
+  if (!snapDoc.exists) {
+    await userRef.set({
+      UserKey.UID: uid,
+      UserKey.EMAIL: auth.currentUser?.email,
+      UserKey.USER_NAME: auth.currentUser?.displayName,
+      UserKey.CHECKED_IN: false,
+      UserKey.IS_VERIFIED: false,
+      UserKey.IS_TERMS_VERIFIED: false,
+    }, SetOptions(merge: true));
+    snapDoc = await userRef.get();
+  }
+
+  final data = snapDoc.data();
+  if (data is! Map<String, dynamic>) {
+    print('toModal: user document missing for $uid');
+    return;
+  }
+  userController.userModel.value = UserModel.fromMap(data);
   print("user model:.. ${userController.userModel.value.uid}");
 }
 

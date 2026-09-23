@@ -15,11 +15,15 @@ class SubscriptionConstants {
   static List<String> premiumProductIds() {
     if (Platform.isAndroid) {
       return [
+        ...kPremierProductIdsAndroid,
         'premium',
         'yearly-premium',
       ];
     } else if (Platform.isIOS) {
+      // Prefer the App Store IDs declared above; also keep legacy IDs that
+      // may still be configured in RevenueCat / App Store Connect.
       return [
+        ...kPremierProductIdsiOS,
         'checkin_monthly_pro',
         'checkin_yearly_pro',
       ];

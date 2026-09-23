@@ -152,14 +152,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool isVerified = false;
 
   getUser() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ??
+        userController.userModel.value.uid;
+    if (uid == null || uid.isEmpty) {
+      debugPrint('Profile getUser: no auth uid');
+      return;
+    }
     DocumentSnapshot snapshot = await FirebaseFirestore.instance
         .collection(Collections.USER)
-        .doc(userController.userModel.value.uid)
+        .doc(uid)
         .get();
-    // log("all snapshot data.......${snapshot.data()}");
-    UserModel currentUser =
-        UserModel.fromMap(snapshot.data() as Map<String, dynamic>);
-    userController.userModel.value = currentUser;
+    var data = snapshot.data();
+    if (data is! Map<String, dynamic>) {
+      debugPrint('Profile getUser: user document missing for uid $uid — creating');
+      await FirebaseFirestore.instance.collection(Collections.USER).doc(uid).set({
+        UserKey.UID: uid,
+        UserKey.EMAIL: FirebaseAuth.instance.currentUser?.email,
+        UserKey.USER_NAME: FirebaseAuth.instance.currentUser?.displayName,
+        UserKey.CHECKED_IN: false,
+        UserKey.IS_VERIFIED: false,
+        UserKey.IS_TERMS_VERIFIED: false,
+      }, SetOptions(merge: true));
+      snapshot = await FirebaseFirestore.instance
+          .collection(Collections.USER)
+          .doc(uid)
+          .get();
+      data = snapshot.data();
+    }
+    if (data is! Map<String, dynamic>) {
+      debugPrint('Profile getUser: still missing after create for uid $uid');
+      return;
+    }
+    userController.userModel.value = UserModel.fromMap(data);
     if (mounted) setState(() {});
   }
 
@@ -270,10 +294,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       followerCountController.setUserIdForProfile(currentUserUid);
     }
 
-    WidgetsFlutterBinding.ensureInitialized().addPostFrameCallback((timeStamp) {
+    WidgetsFlutterBinding.ensureInitialized().addPostFrameCallback((timeStamp) async {
+      await getUser();
+      if (!mounted) return;
       if (FirebaseAuth.instance.currentUser != null &&
-          userController.userModel.value.isTermsVerified == null) {
-        Get.to(const TermsAndConditions(
+          userController.userModel.value.isTermsVerified != true &&
+          Get.currentRoute != '/TermsAndConditions') {
+        Get.to(() => const TermsAndConditions(
           showButtons: true,
         ));
       }
@@ -444,11 +471,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                                           as String),
                                                                   fit: BoxFit
                                                                       .contain)))
-                                                      : (!userController
-                                                              .userModel
-                                                              .value
-                                                              .photoUrl
-                                                              .isEmptyOrNull)
+                                                      : (userController
+                                                                  .userModel
+                                                                  .value
+                                                                  .photoUrl
+                                                                  ?.startsWith(
+                                                                      'http') ==
+                                                              true)
                                                           ? Container(
                                                               height: 20.h,
                                                               width: 35.h,
@@ -457,10 +486,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                                       .circle,
                                                                   image: DecorationImage(
                                                                       image: NetworkImage(userController
-                                                                              .userModel
-                                                                              .value
-                                                                              .photoUrl ??
-                                                                          ""),
+                                                                          .userModel
+                                                                          .value
+                                                                          .photoUrl!),
                                                                       fit: BoxFit
                                                                           .contain)))
                                                           : Container(
@@ -1237,8 +1265,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           image: NetworkImage(
                                               _downloadUrl as String),
                                           fit: BoxFit.contain)))
-                              : (!userController
-                                      .userModel.value.photoUrl.isEmptyOrNull)
+                              : (userController.userModel.value.photoUrl
+                                          ?.startsWith('http') ==
+                                      true)
                                   ? Container(
                                       height: 20.h,
                                       width: 35.h,
@@ -1246,10 +1275,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           shape: BoxShape.circle,
                                           image: DecorationImage(
                                               image: NetworkImage(userController
-                                                      .userModel
-                                                      .value
-                                                      .photoUrl ??
-                                                  ""),
+                                                  .userModel
+                                                  .value
+                                                  .photoUrl!),
                                               fit: BoxFit.contain)))
                                   : Container(
                                       height: 20.h,

@@ -92,7 +92,10 @@ class _SubCommentCompState extends State<SubCommentComp> {
                       }
                     },
                     child: CircleAvatar(
-                      backgroundImage: NetworkImage(userModel?.photoUrl ?? ''),
+                      backgroundImage: (userModel?.photoUrl != null &&
+                              userModel!.photoUrl!.isNotEmpty)
+                          ? NetworkImage(userModel!.photoUrl!)
+                          : null,
                       radius: 17,
                     ),
                   )

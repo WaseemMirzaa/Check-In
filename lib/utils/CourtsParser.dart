@@ -79,16 +79,24 @@ class CourtsParser {
             'Found ${querySnapshot.docs.length} additional locations in Firestore');
         for (var doc in querySnapshot.docs) {
           try {
+            final data = doc.data();
+            final lat = (data['latitude'] as num?)?.toDouble();
+            final lng = (data['longitude'] as num?)?.toDouble();
+            if (lat == null || lng == null) {
+              print(
+                  'Skipping Firestore document ${doc.id}: missing lat/lng');
+              continue;
+            }
             final location = CourtModel(
-              city: doc.data()['city'],
-              street: doc.data()['street'],
-              placeId: doc.data()['placeId'] ?? '',
-              latitude: doc.data()['latitude'],
-              longitude: doc.data()['longitude'],
-              url: doc.data()['url'],
-              state: doc.data()['state'],
-              address: doc.data()['address'],
-              title: doc.data()['title'],
+              city: data['city']?.toString() ?? '',
+              street: data['street']?.toString() ?? '',
+              placeId: data['placeId']?.toString() ?? '',
+              latitude: lat,
+              longitude: lng,
+              url: data['url']?.toString() ?? '',
+              state: data['state']?.toString() ?? '',
+              address: data['address']?.toString() ?? '',
+              title: data['title']?.toString() ?? '',
             );
 
             additionalLocations.add(location);

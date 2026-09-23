@@ -51,10 +51,13 @@ class _NewsFeedScreenState extends State<NewsFeedScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsFlutterBinding.ensureInitialized().addPostFrameCallback((timeStamp) {
+    WidgetsFlutterBinding.ensureInitialized().addPostFrameCallback((timeStamp) async {
+      await userController.getUserData();
+      if (!mounted) return;
       if (FirebaseAuth.instance.currentUser != null &&
-          userController.userModel.value.isTermsVerified == null) {
-        Get.to(const TermsAndConditions(
+          userController.userModel.value.isTermsVerified != true &&
+          Get.currentRoute != '/TermsAndConditions') {
+        Get.to(() => const TermsAndConditions(
           showButtons: true,
         ));
       }

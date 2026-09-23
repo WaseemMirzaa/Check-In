@@ -91,7 +91,9 @@ class CreatePost extends StatelessWidget {
                             clipBehavior: Clip.none,
                             alignment: Alignment.bottomRight,
                             children: [
-                              (!userController.userModel.value.photoUrl.isEmptyOrNull)
+                              (userController.userModel.value.photoUrl
+                                          ?.startsWith('http') ==
+                                      true)
                                   ? Container(
                                   height: 7.8.h,
                                   width: 7.8.h,
@@ -99,7 +101,7 @@ class CreatePost extends StatelessWidget {
                                       shape: BoxShape.circle,
                                       image: DecorationImage(
                                           image: NetworkImage(
-                                              userController.userModel.value.photoUrl ?? ""),
+                                              userController.userModel.value.photoUrl!),
                                           fit: BoxFit.fill)))
                                   : Container(
                                 height: 7.8.h,

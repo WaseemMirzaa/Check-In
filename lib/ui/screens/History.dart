@@ -50,9 +50,13 @@ class _HistoryViewState extends State<HistoryView> {
     // TODO: implement initState
     // fetchData();
     super.initState();
-    WidgetsFlutterBinding.ensureInitialized().addPostFrameCallback((timeStamp) {
-      if (FirebaseAuth.instance.currentUser != null && userController.userModel.value.isTermsVerified == null) {
-        Get.to(const TermsAndConditions(showButtons: true,));
+    WidgetsFlutterBinding.ensureInitialized().addPostFrameCallback((timeStamp) async {
+      await userController.getUserData();
+      if (!mounted) return;
+      if (FirebaseAuth.instance.currentUser != null &&
+          userController.userModel.value.isTermsVerified != true &&
+          Get.currentRoute != '/TermsAndConditions') {
+        Get.to(() => const TermsAndConditions(showButtons: true));
       }
     });
   }

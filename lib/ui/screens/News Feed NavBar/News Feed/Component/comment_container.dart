@@ -119,8 +119,11 @@ class _CommentContainerState extends State<CommentContainer> {
                         }
                       },
                       child: CircleAvatar(
-                        backgroundImage:
-                            NetworkImage(widget.commentModel.userImage ?? ''),
+                        backgroundImage: (widget.commentModel.userImage !=
+                                    null &&
+                                widget.commentModel.userImage!.isNotEmpty)
+                            ? NetworkImage(widget.commentModel.userImage!)
+                            : null,
                         radius: 17,
                       ),
                     )

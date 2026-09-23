@@ -8,11 +8,11 @@ import 'package:check_in/core/constant/subscription_constants.dart';
 import 'package:check_in/model/notification_model.dart';
 import 'package:check_in/ui/screens/News%20Feed%20NavBar/followers_and_following/controller/followers_and_following_controller.dart';
 import 'package:check_in/ui/screens/splash.dart';
-import 'package:device_preview/device_preview.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
@@ -30,7 +30,7 @@ late final FirebaseMessaging _messaging;
 
 String? con;
 final init = Firebase.initializeApp(
-  options: Platform.isIOS ? DefaultFirebaseOptions.currentPlatform : null,
+  options: DefaultFirebaseOptions.currentPlatform,
 );
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print('🔴🔴🔴🔴🔴firebaseMessagingBackgroundHandler');
@@ -76,17 +76,19 @@ void main() async {
   MobileAds.instance.initialize();
 
   await init;
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
+  // MUST run before FCM / Crashlytics / Purchases touch Firebase.
+  // Otherwise FlutterFire defaults App Check to DeviceCheck and you never
+  // see "Firebase App Check Debug Token" in the Xcode console.
+  await _activateAppCheck();
+
   await initialize();
 
-  // if (Platform.isIOS) {
-  //   await Firebase.initializeApp(
-  //     // name: "check_in",// Removing this name causes exception and show white screen on ios
-  //     options: DefaultFirebaseOptions.currentPlatform,
-  //   );
-  // } else {
-  //   await Firebase.initializeApp();
-  // }
-  await Firebase.initializeApp();
   PurchasesConfiguration configuration =
       PurchasesConfiguration(SubscriptionConstants.revenueCatApiKey);
   await Purchases.configure(configuration);
@@ -98,39 +100,53 @@ void main() async {
   await pushNotificationService.init();
   FCMManager.getFCMToken();
 
-  // Initialize your controller here
   Get.put(FollowerCountingController(), permanent: true);
 
-  //Stripe.publishableKey = 'pk_test_51P9IBQRwQJgokiPYdbWlcZnEpVC6ZDb0B7ZMVPFSJzi0LzPWCSG1kzwnrSscPCH1ZZBzWKoLeapYlZX5QLHBBNKR00HKEkqjkJ';
   Stripe.publishableKey =
       'pk_live_51P9IBQRwQJgokiPYvyLG23TCbtFARynKi5dFHmmxmx69GkHZxQm15cmLz8EkHaCAhIpzK9ma2Prr0yQbyF1l6ZpW006am35MWF';
   Stripe.merchantIdentifier = 'merchant.flutter.stripe.test';
   Stripe.urlScheme = 'flutterstripe';
   await Stripe.instance.applySettings();
-  await FirebaseAppCheck.instance.activate();
-
-  // SharedPreferences prefs = await SharedPreferences.getInstance();
-  // var email = prefs.getString('email');
 
   FirebaseAuth.instance.authStateChanges().listen((User? user) {
     if (user != null) {
-      newsFeedController.getMyPosts(); // Fetch posts for the logged-in user
-      // newsFeedController.fetchInitialNewsFeed(); // Fetch posts for the logged-in user
+      newsFeedController.getMyPosts();
     } else {
-      newsFeedController
-          .clearMyPosts(); // Clear posts when no user is logged in
-      newsFeedController
-          .clearNewsFeeds(); // Clear posts when no user is logged in
+      newsFeedController.clearMyPosts();
+      newsFeedController.clearNewsFeeds();
     }
   });
 
-  runApp(
-      // DevicePreview(
-      // enabled: !kReleaseMode,
-      // builder: (context) =>
-      const MyApp()
-      // )
+  runApp(const MyApp());
+}
+
+Future<void> _activateAppCheck() async {
+  // Non-release → debug provider (native NSLog prints the UUID to register).
+  // Release → DeviceCheck / Play Integrity.
+  final useDebugAppCheck = !kReleaseMode;
+  try {
+    await FirebaseAppCheck.instance.activate(
+      appleProvider: useDebugAppCheck
+          ? AppleProvider.debug
+          : AppleProvider.deviceCheck,
+      androidProvider: useDebugAppCheck
+          ? AndroidProvider.debug
+          : AndroidProvider.playIntegrity,
+    );
+    debugPrint(
+      'App Check activated: useDebug=$useDebugAppCheck '
+      '(kDebugMode=$kDebugMode kProfileMode=$kProfileMode '
+      'kReleaseMode=$kReleaseMode)',
+    );
+    if (useDebugAppCheck) {
+      debugPrint(
+        'Search Xcode console for: Firebase App Check Debug Token:',
       );
+    }
+  } catch (e, stacktrace) {
+    debugPrint('Firebase App Check activate failed: $e');
+    FirebaseCrashlytics.instance.recordError(e, stacktrace, fatal: false);
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -160,7 +176,8 @@ class MyApp extends StatelessWidget {
           child: GetMaterialApp(
             debugShowCheckedModeBanner: false,
             title: 'Check In',
-            builder: DevicePreview.appBuilder,
+            // Do not use DevicePreview.appBuilder here unless DevicePreview
+            // wraps runApp — it breaks Overlay and crashes Get.snackbar.
             theme: ThemeData(
               useMaterial3: true,
               scaffoldBackgroundColor: whiteColor,

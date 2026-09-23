@@ -1,9 +1,11 @@
 import 'dart:io';
+
 import 'package:check_in/auth_service.dart';
 import 'package:check_in/core/constant/app_assets.dart';
 import 'package:check_in/core/constant/constant.dart';
 import 'package:check_in/core/constant/temp_language.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -167,25 +169,61 @@ class _TermsAndConditionsState extends State<TermsAndConditions> {
                               ? () async {
                                   if (widget.fromSignup && widget.showButtons) {
                                     Get.back(result: true);
-                                  } else if (widget.showButtons) {
-                                    await FirebaseFirestore.instance
-                                        .collection(Collections.USER)
-                                        .doc(userController.userModel.value.uid)
-                                        .update(
-                                            {UserKey.IS_TERMS_VERIFIED: true});
-                                    DocumentSnapshot snapshot =
-                                        await FirebaseFirestore.instance
-                                            .collection(Collections.USER)
-                                            .doc(userController
-                                                .userModel.value.uid)
-                                            .get();
-                                    userController.userModel.value =
-                                        UserModel.fromMap(snapshot.data()
-                                            as Map<String, dynamic>);
-                                    Get.back();
-                                  } else {
-                                    Navigator.pop(context);
+                                    return;
                                   }
+                                  if (widget.showButtons) {
+                                    final uid =
+                                        FirebaseAuth.instance.currentUser?.uid;
+                                    // Always clear the local gate so Terms does
+                                    // not reopen on every tab.
+                                    userController.userModel.value =
+                                        userController.userModel.value.copyWith(
+                                      uid: uid ??
+                                          userController.userModel.value.uid,
+                                      isTermsVerified: true,
+                                    );
+                                    if (uid == null || uid.isEmpty) {
+                                      Get.back(result: true);
+                                      return;
+                                    }
+                                    try {
+                                      final userRef = FirebaseFirestore.instance
+                                          .collection(Collections.USER)
+                                          .doc(uid);
+                                      await userRef.set(
+                                        {
+                                          UserKey.UID: uid,
+                                          UserKey.IS_TERMS_VERIFIED: true,
+                                          if (FirebaseAuth.instance.currentUser
+                                                  ?.email !=
+                                              null)
+                                            UserKey.EMAIL: FirebaseAuth
+                                                .instance.currentUser!.email,
+                                          if (FirebaseAuth.instance.currentUser
+                                                  ?.displayName !=
+                                              null)
+                                            UserKey.USER_NAME: FirebaseAuth
+                                                .instance
+                                                .currentUser!
+                                                .displayName,
+                                        },
+                                        SetOptions(merge: true),
+                                      );
+                                      final snapshot = await userRef.get();
+                                      final data = snapshot.data();
+                                      if (data != null) {
+                                        userController.userModel.value =
+                                            UserModel.fromMap(data);
+                                      }
+                                      Get.back(result: true);
+                                    } catch (e) {
+                                      debugPrint(
+                                          'Failed to save terms agreement: $e');
+                                      Get.back(result: true);
+                                    }
+                                    return;
+                                  }
+                                  Navigator.pop(context);
                                 }
                               : null,
                           child: Container(

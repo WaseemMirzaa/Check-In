@@ -810,13 +810,32 @@ class _CheckInState extends State<CheckIn> with SingleTickerProviderStateMixin {
     try {
       isLoading = true;
       if (mounted) setState(() {});
-      if (FirebaseAuth.instance.currentUser != null) {
-        DocumentSnapshot snapshot = await FirebaseFirestore.instance
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) return;
+
+      DocumentSnapshot snapshot = await FirebaseFirestore.instance
+          .collection(Collections.USER)
+          .doc(uid)
+          .get();
+      var data = snapshot.data();
+      if (data is! Map<String, dynamic>) {
+        print('Document does not exist! Creating profile for $uid');
+        await FirebaseFirestore.instance.collection(Collections.USER).doc(uid).set({
+          UserKey.UID: uid,
+          UserKey.EMAIL: FirebaseAuth.instance.currentUser?.email,
+          UserKey.USER_NAME: FirebaseAuth.instance.currentUser?.displayName,
+          UserKey.CHECKED_IN: false,
+          UserKey.IS_VERIFIED: false,
+          UserKey.IS_TERMS_VERIFIED: false,
+        }, SetOptions(merge: true));
+        snapshot = await FirebaseFirestore.instance
             .collection(Collections.USER)
-            .doc(FirebaseAuth.instance.currentUser?.uid ?? "")
+            .doc(uid)
             .get();
-        userController.userModel.value =
-            UserModel.fromMap(snapshot.data() as Map<String, dynamic>);
+        data = snapshot.data();
+      }
+      if (data is Map<String, dynamic>) {
+        userController.userModel.value = UserModel.fromMap(data);
         print(userController.userModel.value);
       }
     } catch (e) {
@@ -825,12 +844,10 @@ class _CheckInState extends State<CheckIn> with SingleTickerProviderStateMixin {
       isLoading = false;
       if (mounted) setState(() {});
     }
-    // UserModel currentUser = UserModel.fromMap(snapshot.data() as Map<String, dynamic>);
   }
 
   @override
   void initState() {
-    getUser();
     // setCustomMarkerIcon();
     getCurrentLocation();
     indexValue();
@@ -838,11 +855,14 @@ class _CheckInState extends State<CheckIn> with SingleTickerProviderStateMixin {
     // _checkIfWithinRadius();
     super.initState();
     // initDynamicLinks(context);
-    WidgetsFlutterBinding.ensureInitialized().addPostFrameCallback((timeStamp) {
+    WidgetsFlutterBinding.ensureInitialized().addPostFrameCallback((timeStamp) async {
       initTracking();
+      await getUser();
+      if (!mounted) return;
       if (FirebaseAuth.instance.currentUser != null &&
-          userController.userModel.value.isTermsVerified == null) {
-        Get.to(const TermsAndConditions(
+          userController.userModel.value.isTermsVerified != true &&
+          Get.currentRoute != '/TermsAndConditions') {
+        Get.to(() => const TermsAndConditions(
           showButtons: true,
         ));
       }

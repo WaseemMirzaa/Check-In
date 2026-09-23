@@ -62,15 +62,52 @@ class SubscriptionController extends GetxController {
       isPremiumProductsLoading.value = true;
       premiumProductsError.value = '';
 
-      List<StoreProduct> availableProducts = await Purchases.getProducts(
-          SubscriptionConstants.premiumProductIds());
+      List<StoreProduct> availableProducts = [];
+
+      // 1) Preferred: current RevenueCat offering (what usually "worked before")
+      try {
+        final offerings = await Purchases.getOfferings();
+        final current = offerings.current;
+        if (current != null && current.availablePackages.isNotEmpty) {
+          availableProducts = current.availablePackages
+              .map((package) => package.storeProduct)
+              .toList();
+          if (kDebugMode) {
+            print(
+              'Premium products from offerings '
+              '(${current.identifier}): $availableProducts',
+            );
+          }
+        } else if (kDebugMode) {
+          print(
+            'RevenueCat offerings empty/current=null. '
+            'offeringIds=${offerings.all.keys.toList()}',
+          );
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('getOfferings failed (will fall back to getProducts): $e');
+        }
+      }
+
+      // 2) Fallback: fetch by product IDs from App Store / Play
+      if (availableProducts.isEmpty) {
+        final ids = SubscriptionConstants.premiumProductIds();
+        if (kDebugMode) {
+          print('Fetching Store products by ids: $ids');
+        }
+        availableProducts = await Purchases.getProducts(ids);
+        if (kDebugMode) {
+          print('Premium products from getProducts: $availableProducts');
+        }
+      }
 
       availableProducts.sort((a, b) => a.price.compareTo(b.price));
-
       premiumProducts.value = availableProducts;
 
-      if (kDebugMode) {
-        print('Premium products: $availableProducts');
+      if (availableProducts.isEmpty) {
+        premiumProductsError.value =
+            'No subscription products found. Check App Store Connect + RevenueCat.';
       }
     } on PlatformException catch (e) {
       if (kDebugMode) {

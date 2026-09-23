@@ -27,6 +27,23 @@ class UserServices{
     }
   }
 
+  /// Creates a minimal USER doc when Auth exists but Firestore profile is missing.
+  Future<void> ensureUserProfile({
+    required String uid,
+    String? email,
+    String? userName,
+  }) async {
+    if (uid.isEmpty) return;
+    await db.collection(Collections.USER).doc(uid).set({
+      UserKey.UID: uid,
+      if (email != null) UserKey.EMAIL: email,
+      if (userName != null) UserKey.USER_NAME: userName,
+      UserKey.CHECKED_IN: false,
+      UserKey.IS_VERIFIED: false,
+      UserKey.IS_TERMS_VERIFIED: false,
+    }, SetOptions(merge: true));
+  }
+
   Future<List<UserModel>?> getUsersList() async {
 
     List<UserModel> usersList = [];

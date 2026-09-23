@@ -18,15 +18,24 @@ class UserController extends GetxController {
   }
 
   Future<void> getUserData() async {
-    if (FirebaseAuth.instance.currentUser != null) {
-      UserModel? userData = await userServices
-          .getUserData(FirebaseAuth.instance.currentUser?.uid ?? '');
-      if (userData != null) {
-        userModel.value = userData;
-        userModel.value.isPremium =
-            (Get.put(SubscriptionController()).hasActivePremiumSubscription());
-        blockProfiles.addAll(userData.blockProfiles ?? []);
-      }
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+
+    UserModel? userData = await userServices.getUserData(uid);
+    if (userData == null) {
+      // Auth session without Firestore profile — create a minimal one.
+      await userServices.ensureUserProfile(
+        uid: uid,
+        email: FirebaseAuth.instance.currentUser?.email,
+        userName: FirebaseAuth.instance.currentUser?.displayName,
+      );
+      userData = await userServices.getUserData(uid);
+    }
+    if (userData != null) {
+      userModel.value = userData;
+      userModel.value.isPremium =
+          (Get.put(SubscriptionController()).hasActivePremiumSubscription());
+      blockProfiles.addAll(userData.blockProfiles ?? []);
     }
   }
 
