@@ -1,0 +1,105 @@
+name: Build debug Android AAB and iOS Simulator app
+
+# Manual builds of:
+#  - a debug Android App Bundle (.aab) - the Play Store upload format,
+#    as opposed to the sideloadable .apk built by build-debug-apk.yml
+#  - an unsigned iOS build for the Simulator only
+# Both are debug/unsigned: there is no android/key.properties in this
+# repo, and no Apple signing certificate, provisioning profile, or App
+# Store Connect API key committed anywhere either (correctly - those
+# are secrets). Neither job needs any of that, since debug Android
+# builds use the auto-generated debug keystore and Simulator iOS
+# builds aren't code-signed at all.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or commit to build'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  android_aab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses > /dev/null || true
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: 'stable'
+
+      - run: flutter pub get
+
+      - run: flutter build appbundle --debug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debug-aab
+          path: build/app/outputs/bundle/debug/app-debug.aab
+          retention-days: 14
+
+      - name: Publish AAB to a GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          OUT="$GITHUB_WORKSPACE/build/app/outputs/bundle/debug"
+          TAG="debug-aab-${{ github.run_id }}"
+          gh release create "$TAG" \
+            "$OUT"/app-debug.aab \
+            --title "Debug AAB build (run ${{ github.run_id }})" \
+            --notes "Automated debug Android App Bundle from commit ${{ github.sha }}. Debug-signed (no release keystore in this repo), so it is NOT accepted by Play Console as-is - that needs a release-signed .aab. Not directly installable either: an .aab needs bundletool (or Play Console) to turn it into device-specific APKs first. For something you can sideload directly, use the build-debug-apk.yml workflow's .apk instead." \
+            --target "${{ github.sha }}"
+
+  ios_simulator:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: 'stable'
+
+      - run: flutter pub get
+
+      - run: flutter build ios --debug --simulator --no-codesign
+
+      - name: Zip the simulator app bundle
+        run: |
+          cd build/ios/iphonesimulator
+          zip -r -y -q Runner-iphonesimulator-debug.zip Runner.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debug-ios-simulator
+          path: build/ios/iphonesimulator/Runner-iphonesimulator-debug.zip
+          retention-days: 14
+
+      - name: Publish Simulator build to a GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="debug-ios-sim-${{ github.run_id }}"
+          gh release create "$TAG" \
+            "build/ios/iphonesimulator/Runner-iphonesimulator-debug.zip" \
+            --title "Debug iOS Simulator build (run ${{ github.run_id }})" \
+            --notes "Unsigned iOS build for the Simulator ONLY, from commit ${{ github.sha }}. This cannot be installed on a real iPhone/iPad, submitted to TestFlight, or distributed anywhere - a real device needs an Apple Distribution/Development certificate and matching provisioning profile (or an App Store Connect API key for automatic signing), none of which exist in this repo. To run this build: on a Mac with Xcode, unzip it, then \`xcrun simctl install booted Runner.app && xcrun simctl launch booted com.developlogix.checkinapp\` (boot a simulator first with \`open -a Simulator\` if needed)." \
+            --target "${{ github.sha }}"
