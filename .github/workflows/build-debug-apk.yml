@@ -27,10 +27,21 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - uses: android-actions/setup-android@v3
-
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses > /dev/null || true
+      - name: Install Android SDK components
+        run: |
+          # android-actions/setup-android@v3 tries to also install the
+          # long-deprecated 'tools' package, which Google's SDK repository
+          # no longer serves at all ("Failed to find package 'tools'"),
+          # failing the whole step. ubuntu-latest already ships a usable
+          # cmdline-tools under $ANDROID_HOME, so talk to sdkmanager
+          # directly instead of going through that action.
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -1)
+          fi
+          echo "Using sdkmanager: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - uses: subosito/flutter-action@v2
         with:
